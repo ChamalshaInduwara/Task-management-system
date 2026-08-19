@@ -6,6 +6,7 @@ export default function Home() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingTask, setEditingTask] = useState(null);
 
   const [showForm, setShowForm] = useState(false);
 
@@ -52,37 +53,75 @@ export default function Home() {
     }));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleEdit = (task) => {
+  setEditingTask(task);
 
-    try {
-      const response = await fetch(`${API_URL}/api/tasks`, {
+  setFormData({
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    dueDate: task.dueDate.split("T")[0],
+  });
+
+  setShowForm(true);
+};
+
+  const handleSubmit = async (event) => {
+  event.preventDefault();
+
+  try {
+    let response;
+
+    if (editingTask) {
+      response = await fetch(
+        `${API_URL}/api/tasks/${editingTask._id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        }
+      );
+    } else {
+      response = await fetch(`${API_URL}/api/tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to create task");
-      }
-
-      setFormData({
-        title: "",
-        description: "",
-        status: "Pending",
-        dueDate: "",
-      });
-
-      setShowForm(false);
-
-      await fetchTasks();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to create task.");
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(
+        editingTask
+          ? "Failed to update task"
+          : "Failed to create task"
+      );
+    }
+
+    setFormData({
+      title: "",
+      description: "",
+      status: "Pending",
+      dueDate: "",
+    });
+
+    setEditingTask(null);
+    setShowForm(false);
+
+    await fetchTasks();
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      editingTask
+        ? "Failed to update task."
+        : "Failed to create task."
+    );
+  }
+};
 
   const totalTasks = tasks.length;
 
@@ -114,10 +153,21 @@ export default function Home() {
           </div>
 
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+            setEditingTask(null);
+
+            setFormData({
+              title: "",
+              description: "",
+              status: "Pending",
+              dueDate: "",
+            });
+
+            setShowForm(true);
+            }}
             className="rounded-lg bg-black px-5 py-3 font-medium text-white transition hover:bg-gray-800"
-          >
-            + Add Task
+            >
+              + Add Task
           </button>
         </div>
 
@@ -126,11 +176,21 @@ export default function Home() {
           <div className="mb-10 rounded-xl border bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">
-                Add New Task
+               {editingTask ? "Edit Task" : "Add New Task"}
               </h2>
 
               <button
-                onClick={() => setShowForm(false)}
+               onClick={() => {
+                setShowForm(false);
+                setEditingTask(null);
+
+                setFormData({
+                  title: "",
+                  description: "",
+                  status: "Pending",
+                  dueDate: "",
+                  });
+                }}
                 className="text-gray-500 hover:text-gray-900"
               >
                 ✕
@@ -217,7 +277,7 @@ export default function Home() {
                   type="submit"
                   className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
                 >
-                  Create Task
+                  {editingTask ? "Update Task" : "Create Task"}
                 </button>
               </div>
             </form>
@@ -322,9 +382,12 @@ export default function Home() {
                   </p>
 
                   <div className="flex gap-3">
-                    <button className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
-                      Edit
-                    </button>
+                   <button
+                    onClick={() => handleEdit(task)}
+                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                   >
+                    Edit
+                   </button>
 
                     <button className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
                       Delete
