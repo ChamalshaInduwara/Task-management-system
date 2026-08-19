@@ -3,10 +3,11 @@ const cors = require("cors");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
+const taskRoutes = require("./routes/taskRoutes");
 
 const app = express();
 
-// Connect database
+// Connect to MongoDB
 connectDB();
 
 // Middleware
@@ -17,6 +18,9 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("Task Management API is running");
 });
+
+// Task API routes
+app.use("/api/tasks", taskRoutes);
 
 const PORT = process.env.PORT || 5000;
 
