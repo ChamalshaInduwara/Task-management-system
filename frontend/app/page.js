@@ -7,6 +7,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingTask, setEditingTask] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const [showForm, setShowForm] = useState(false);
 
@@ -164,6 +166,17 @@ export default function Home() {
     alert("Failed to delete task.");
   }
 };
+
+const filteredTasks = tasks.filter((task) => {
+  const matchesSearch =
+    task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    task.description.toLowerCase().includes(searchTerm.toLowerCase());
+
+  const matchesStatus =
+    statusFilter === "All" || task.status === statusFilter;
+
+  return matchesSearch && matchesStatus;
+});
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -361,21 +374,42 @@ export default function Home() {
             </div>
           )}
 
+          <div className="mb-6 flex flex-col gap-4 md:flex-row">
+           <input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+           />
+
+          <select
+           value={statusFilter}
+           onChange={(e) => setStatusFilter(e.target.value)}
+           className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+          >
+         <option value="All">All Status</option>
+         <option value="Pending">Pending</option>
+         <option value="In Progress">In Progress</option>
+         <option value="Completed">Completed</option>
+          </select>
+      </div>
+
           {!loading && error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
               {error}
             </div>
           )}
 
-          {!loading && !error && tasks.length === 0 && (
+          {!loading && !error && filteredTasks.length === 0 && (
             <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
               No tasks found. Add your first task.
             </div>
           )}
 
-          {!loading && !error && tasks.length > 0 && (
+          {!loading && !error && filteredTasks.length > 0 && (
             <div className="grid gap-5 md:grid-cols-2">
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <div
                   key={task._id}
                   className="rounded-xl border bg-white p-6 shadow-sm"
