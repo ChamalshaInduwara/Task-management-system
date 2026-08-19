@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -9,8 +9,9 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-
+  const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -21,7 +22,8 @@ export default function Home() {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-  const fetchTasks = async () => {
+  // Fetch all tasks
+  const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -40,69 +42,26 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL]);
 
+  // Load tasks when page opens
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [fetchTasks]);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
+  // Automatically remove success message after 3 seconds
+  useEffect(() => {
+    if (!message) return;
 
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
+    const timer = setTimeout(() => {
+      setMessage("");
+    }, 3000);
 
-  const handleEdit = (task) => {
-  setEditingTask(task);
+    return () => clearTimeout(timer);
+  }, [message]);
 
-  setFormData({
-    title: task.title,
-    description: task.description,
-    status: task.status,
-    dueDate: task.dueDate.split("T")[0],
-  });
-
-  setShowForm(true);
-};
-
-  const handleSubmit = async (event) => {
-  event.preventDefault();
-
-  try {
-    let response;
-
-    if (editingTask) {
-      response = await fetch(
-        `${API_URL}/api/tasks/${editingTask._id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
-        }
-      );
-    } else {
-      response = await fetch(`${API_URL}/api/tasks`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        editingTask
-          ? "Failed to update task"
-          : "Failed to create task"
-      );
-    }
-
+  // Reset task form
+  const resetForm = () => {
     setFormData({
       title: "",
       description: "",
@@ -112,19 +71,149 @@ export default function Home() {
 
     setEditingTask(null);
     setShowForm(false);
+  };
 
-    await fetchTasks();
-  } catch (error) {
-    console.error(error);
+  // Handle input changes
+  const handleChange = (event) => {
+    const { name, value } = event.target;
 
-    alert(
-      editingTask
-        ? "Failed to update task."
-        : "Failed to create task."
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  // Open Add Task form
+  const handleAddTask = () => {
+    setEditingTask(null);
+
+    setFormData({
+      title: "",
+      description: "",
+      status: "Pending",
+      dueDate: "",
+    });
+
+    setShowForm(true);
+  };
+
+  // Open Edit Task form
+  const handleEdit = (task) => {
+    setEditingTask(task);
+
+    setFormData({
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      dueDate: task.dueDate.split("T")[0],
+    });
+
+    setShowForm(true);
+  };
+
+  // Create or update task
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    // Extra validation
+    if (!formData.title.trim()) {
+      alert("Please enter a task title.");
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      alert("Please enter a task description.");
+      return;
+    }
+
+    if (!formData.dueDate) {
+      alert("Please select a due date.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const isEditing = Boolean(editingTask);
+
+      const url = isEditing
+        ? `${API_URL}/api/tasks/${editingTask._id}`
+        : `${API_URL}/api/tasks`;
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          isEditing
+            ? "Failed to update task"
+            : "Failed to create task"
+        );
+      }
+
+      setMessage(
+        isEditing
+          ? "Task updated successfully."
+          : "Task created successfully."
+      );
+
+      resetForm();
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        editingTask
+          ? "Failed to update task."
+          : "Failed to create task."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete task
+  const handleDelete = async (taskId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this task?"
     );
-  }
-};
 
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/tasks/${taskId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete task");
+      }
+
+      setMessage("Task deleted successfully.");
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete task.");
+    }
+  };
+
+  // Statistics
   const totalTasks = tasks.length;
 
   const pendingTasks = tasks.filter(
@@ -139,44 +228,22 @@ export default function Home() {
     (task) => task.status === "Completed"
   ).length;
 
-  const handleDelete = async (taskId) => {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this task?"
-  );
+  // Search and filter
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch =
+      task.title
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      task.description
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-  if (!confirmed) {
-    return;
-  }
+    const matchesStatus =
+      statusFilter === "All" ||
+      task.status === statusFilter;
 
-  try {
-    const response = await fetch(
-      `${API_URL}/api/tasks/${taskId}`,
-      {
-        method: "DELETE",
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Failed to delete task");
-    }
-
-    await fetchTasks();
-  } catch (error) {
-    console.error(error);
-    alert("Failed to delete task.");
-  }
-};
-
-const filteredTasks = tasks.filter((task) => {
-  const matchesSearch =
-    task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    task.description.toLowerCase().includes(searchTerm.toLowerCase());
-
-  const matchesStatus =
-    statusFilter === "All" || task.status === statusFilter;
-
-  return matchesSearch && matchesStatus;
-});
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -194,57 +261,46 @@ const filteredTasks = tasks.filter((task) => {
           </div>
 
           <button
-            onClick={() => {
-            setEditingTask(null);
-
-            setFormData({
-              title: "",
-              description: "",
-              status: "Pending",
-              dueDate: "",
-            });
-
-            setShowForm(true);
-            }}
+            onClick={handleAddTask}
             className="rounded-lg bg-black px-5 py-3 font-medium text-white transition hover:bg-gray-800"
-            >
-              + Add Task
+          >
+            + Add Task
           </button>
         </div>
 
-        {/* Add Task Form */}
+        {/* Add / Edit Task Form */}
         {showForm && (
           <div className="mb-10 rounded-xl border bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">
-               {editingTask ? "Edit Task" : "Add New Task"}
+                {editingTask ? "Edit Task" : "Add New Task"}
               </h2>
 
               <button
-               onClick={() => {
-                setShowForm(false);
-                setEditingTask(null);
-
-                setFormData({
-                  title: "",
-                  description: "",
-                  status: "Pending",
-                  dueDate: "",
-                  });
-                }}
+                type="button"
+                onClick={resetForm}
                 className="text-gray-500 hover:text-gray-900"
+                aria-label="Close task form"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
+              {/* Title */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="title"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Title
                 </label>
 
                 <input
+                  id="title"
                   type="text"
                   name="title"
                   value={formData.title}
@@ -255,46 +311,69 @@ const filteredTasks = tasks.filter((task) => {
                 />
               </div>
 
+              {/* Description */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="description"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Description
                 </label>
 
                 <textarea
+                  id="description"
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
                   required
-                  rows="4"
+                  rows={4}
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
                   placeholder="Enter task description"
                 />
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
+                {/* Status */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="status"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
                     Status
                   </label>
 
                   <select
+                    id="status"
                     name="status"
                     value={formData.status}
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
                   >
-                    <option value="Pending">Pending</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Completed">Completed</option>
+                    <option value="Pending">
+                      Pending
+                    </option>
+
+                    <option value="In Progress">
+                      In Progress
+                    </option>
+
+                    <option value="Completed">
+                      Completed
+                    </option>
                   </select>
                 </div>
 
+                {/* Due Date */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="dueDate"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
                     Due Date
                   </label>
 
                   <input
+                    id="dueDate"
                     type="date"
                     name="dueDate"
                     value={formData.dueDate}
@@ -308,48 +387,75 @@ const filteredTasks = tasks.filter((task) => {
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
-                  className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                  onClick={resetForm}
+                  disabled={submitting}
+                  className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                  disabled={submitting}
+                  className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {editingTask ? "Update Task" : "Create Task"}
+                  {submitting
+                    ? editingTask
+                      ? "Updating..."
+                      : "Creating..."
+                    : editingTask
+                    ? "Update Task"
+                    : "Create Task"}
                 </button>
               </div>
             </form>
           </div>
         )}
 
+        {/* Success Message */}
+        {message && (
+          <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-700">
+            {message}
+          </div>
+        )}
+
         {/* Statistics */}
         <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">Total Tasks</p>
+            <p className="text-sm text-gray-500">
+              Total Tasks
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-gray-900">
               {totalTasks}
             </p>
           </div>
 
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">Pending</p>
+            <p className="text-sm text-gray-500">
+              Pending
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-yellow-600">
               {pendingTasks}
             </p>
           </div>
 
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">In Progress</p>
+            <p className="text-sm text-gray-500">
+              In Progress
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-blue-600">
               {inProgressTasks}
             </p>
           </div>
 
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">Completed</p>
+            <p className="text-sm text-gray-500">
+              Completed
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-green-600">
               {completedTasks}
             </p>
@@ -368,100 +474,141 @@ const filteredTasks = tasks.filter((task) => {
             </p>
           </div>
 
+          {/* Search and Filter */}
+          <div className="mb-6 flex flex-col gap-4 md:flex-row">
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchTerm}
+              onChange={(event) =>
+                setSearchTerm(event.target.value)
+              }
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+            />
+
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value)
+              }
+              className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+            >
+              <option value="All">
+                All Status
+              </option>
+
+              <option value="Pending">
+                Pending
+              </option>
+
+              <option value="In Progress">
+                In Progress
+              </option>
+
+              <option value="Completed">
+                Completed
+              </option>
+            </select>
+          </div>
+
+          {/* Loading */}
           {loading && (
             <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
               Loading tasks...
             </div>
           )}
 
-          <div className="mb-6 flex flex-col gap-4 md:flex-row">
-           <input
-            type="text"
-            placeholder="Search tasks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
-           />
-
-          <select
-           value={statusFilter}
-           onChange={(e) => setStatusFilter(e.target.value)}
-           className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
-          >
-         <option value="All">All Status</option>
-         <option value="Pending">Pending</option>
-         <option value="In Progress">In Progress</option>
-         <option value="Completed">Completed</option>
-          </select>
-      </div>
-
+          {/* Error */}
           {!loading && error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
               {error}
             </div>
           )}
 
-          {!loading && !error && filteredTasks.length === 0 && (
-            <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
-              No tasks found. Add your first task.
-            </div>
-          )}
+          {/* No Tasks */}
+          {!loading &&
+            !error &&
+            tasks.length === 0 && (
+              <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+                No tasks found. Add your first task.
+              </div>
+            )}
 
-          {!loading && !error && filteredTasks.length > 0 && (
-            <div className="grid gap-5 md:grid-cols-2">
-              {filteredTasks.map((task) => (
-                <div
-                  key={task._id}
-                  className="rounded-xl border bg-white p-6 shadow-sm"
-                >
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {task.title}
-                    </h3>
+          {/* No Search / Filter Results */}
+          {!loading &&
+            !error &&
+            tasks.length > 0 &&
+            filteredTasks.length === 0 && (
+              <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+                No matching tasks found.
+              </div>
+            )}
 
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        task.status === "Completed"
-                          ? "bg-green-100 text-green-700"
-                          : task.status === "In Progress"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {task.status}
-                    </span>
+          {/* Task Cards */}
+          {!loading &&
+            !error &&
+            filteredTasks.length > 0 && (
+              <div className="grid gap-5 md:grid-cols-2">
+                {filteredTasks.map((task) => (
+                  <div
+                    key={task._id}
+                    className="rounded-xl border bg-white p-6 shadow-sm"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {task.title}
+                      </h3>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          task.status === "Completed"
+                            ? "bg-green-100 text-green-700"
+                            : task.status ===
+                              "In Progress"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {task.status}
+                      </span>
+                    </div>
+
+                    <p className="mb-5 text-sm leading-6 text-gray-600">
+                      {task.description}
+                    </p>
+
+                    <p className="mb-5 text-sm text-gray-500">
+                      Due Date:{" "}
+                      <span className="font-medium text-gray-700">
+                        {new Date(
+                          task.dueDate
+                        ).toLocaleDateString()}
+                      </span>
+                    </p>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() =>
+                          handleEdit(task)
+                        }
+                        className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleDelete(task._id)
+                        }
+                        className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-
-                  <p className="mb-5 text-sm leading-6 text-gray-600">
-                    {task.description}
-                  </p>
-
-                  <p className="mb-5 text-sm text-gray-500">
-                    Due Date:{" "}
-                    <span className="font-medium text-gray-700">
-                      {new Date(task.dueDate).toLocaleDateString()}
-                    </span>
-                  </p>
-
-                  <div className="flex gap-3">
-                   <button
-                    onClick={() => handleEdit(task)}
-                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
-                   >
-                    Edit
-                   </button>
-
-                    <button
-                    onClick={() => handleDelete(task._id)}
-                    className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
         </div>
       </div>
     </main>
