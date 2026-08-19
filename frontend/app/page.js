@@ -7,6 +7,15 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [showForm, setShowForm] = useState(false);
+
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    status: "Pending",
+    dueDate: "",
+  });
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   const fetchTasks = async () => {
@@ -33,6 +42,47 @@ export default function Home() {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    try {
+      const response = await fetch(`${API_URL}/api/tasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create task");
+      }
+
+      setFormData({
+        title: "",
+        description: "",
+        status: "Pending",
+        dueDate: "",
+      });
+
+      setShowForm(false);
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to create task.");
+    }
+  };
 
   const totalTasks = tasks.length;
 
@@ -63,10 +113,116 @@ export default function Home() {
             </p>
           </div>
 
-          <button className="rounded-lg bg-black px-5 py-3 font-medium text-white transition hover:bg-gray-800">
+          <button
+            onClick={() => setShowForm(true)}
+            className="rounded-lg bg-black px-5 py-3 font-medium text-white transition hover:bg-gray-800"
+          >
             + Add Task
           </button>
         </div>
+
+        {/* Add Task Form */}
+        {showForm && (
+          <div className="mb-10 rounded-xl border bg-white p-6 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Add New Task
+              </h2>
+
+              <button
+                onClick={() => setShowForm(false)}
+                className="text-gray-500 hover:text-gray-900"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Title
+                </label>
+
+                <input
+                  type="text"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+                  placeholder="Enter task title"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Description
+                </label>
+
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  required
+                  rows="4"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+                  placeholder="Enter task description"
+                />
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Status
+                  </label>
+
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Due Date
+                  </label>
+
+                  <input
+                    type="date"
+                    name="dueDate"
+                    value={formData.dueDate}
+                    onChange={handleChange}
+                    required
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                >
+                  Create Task
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Statistics */}
         <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -166,11 +322,11 @@ export default function Home() {
                   </p>
 
                   <div className="flex gap-3">
-                    <button className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100">
+                    <button className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
                       Edit
                     </button>
 
-                    <button className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50">
+                    <button className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
                       Delete
                     </button>
                   </div>
